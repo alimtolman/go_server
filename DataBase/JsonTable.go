@@ -3,9 +3,11 @@ package DataBase
 import (
 	"Server/Helpers/File"
 	"encoding/json"
+	"sync"
 )
 
 type JsonTable[T Indexable] struct {
+	mutex     sync.Mutex
 	directory string
 	path      string
 	lastId    uint32
@@ -36,7 +38,9 @@ func NewJsonTable[T Indexable](name string) *JsonTable[T] {
 }
 
 func (table *JsonTable[T]) Add(item T) {
-	item.GetId()
+	table.mutex.Lock()
+	defer table.mutex.Unlock()
+
 	table.data = append(table.data, item)
 
 	table.updateLastId()
@@ -44,6 +48,9 @@ func (table *JsonTable[T]) Add(item T) {
 }
 
 func (table *JsonTable[T]) AddOrSet(item T) {
+	table.mutex.Lock()
+	defer table.mutex.Unlock()
+
 	index := table.findIndex(item)
 
 	if index >= 0 {
@@ -54,6 +61,10 @@ func (table *JsonTable[T]) AddOrSet(item T) {
 
 	table.updateLastId()
 	table.save()
+}
+
+func (table *JsonTable[T]) Count() int {
+	return len(table.data)
 }
 
 func (table *JsonTable[T]) Get(predicate func(T) bool) T {
@@ -89,17 +100,22 @@ func (table *JsonTable[T]) NextId(predicate func(T) bool) uint32 {
 }
 
 func (table *JsonTable[T]) Remove(predicate func(T) bool) {
-	data := make([]T, 0)
+	table.mutex.Lock()
+	defer table.mutex.Unlock()
 
-	if predicate != nil {
+	if predicate == nil {
+		table.data = table.data[:0]
+	} else {
+		filtered := table.data[:0]
+
 		for _, item := range table.data {
 			if !predicate(item) {
-				data = append(data, item)
+				filtered = append(filtered, item)
 			}
 		}
-	}
 
-	table.data = data
+		table.data = filtered
+	}
 
 	table.updateLastId()
 	table.save()
@@ -112,16 +128,12 @@ func (table *JsonTable[T]) RemoveAll() {
 /* private */
 
 func (table *JsonTable[T]) findIndex(item T) int {
-	index := -1
-
 	for i, existing := range table.data {
 		if existing.GetId() == item.GetId() {
-			index = i
-			break
+			return i
 		}
 	}
-
-	return index
+	return -1
 }
 
 func (table *JsonTable[T]) save() {

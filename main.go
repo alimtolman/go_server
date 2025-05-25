@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"sync"
 )
 
 const http_port = "80"
@@ -52,16 +53,31 @@ func RootHandler(writer http.ResponseWriter, request *http.Request) {
 }
 
 func main() {
+	var waitGroup sync.WaitGroup
+
 	http.HandleFunc("/", RootHandler)
 	http.HandleFunc("/api/data/add", AppDataAdd)
 	http.HandleFunc("/api/data/clear", AppDataClear)
 	http.HandleFunc("/api/data/get", AppDataGet)
 
-	if err := http.ListenAndServe(":"+http_port, nil); err != nil {
-		log.Fatal("Server listen error:", err)
-	}
+	waitGroup.Add(1)
+	waitGroup.Add(1)
 
-	if err := http.ListenAndServeTLS(":"+https_port, cert_path, key_path, nil); err != nil {
-		log.Fatal("Server tls listen error:", err)
-	}
+	go func() {
+		if err := http.ListenAndServe(":"+http_port, nil); err != nil {
+			log.Fatal("Server listen error:", err)
+		}
+
+		waitGroup.Done()
+	}()
+
+	go func() {
+		if err := http.ListenAndServeTLS(":"+https_port, cert_path, key_path, nil); err != nil {
+			log.Fatal("Server tls listen error:", err)
+		}
+
+		waitGroup.Done()
+	}()
+
+	waitGroup.Wait()
 }
