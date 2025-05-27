@@ -28,3 +28,7 @@ type AppData struct {
 func NewAppData(id uint32, data string) AppData {
 	return AppData{NewIndexedType(id), data}
 }
+
+func AppDataDefault() AppData {
+	return NewAppData(0, "")
+}

@@ -37,9 +37,25 @@ func AppDataClear(writer http.ResponseWriter, request *http.Request) {
 func AppDataGet(writer http.ResponseWriter, request *http.Request) {
 	q_id := request.URL.Query().Get("id")
 	id := Convert.StrToUInt(q_id, 0)
-	data := Tables.AppData.Get(func(item DataBase.AppData) bool { return item.Id == id })
+	data, err := Tables.AppData.Get(func(item DataBase.AppData) bool { return item.Id == id })
 
-	fmt.Fprint(writer, data.Data)
+	if err == nil {
+		fmt.Fprint(writer, data.Data)
+	} else {
+		fmt.Fprint(writer, err.Error())
+	}
+}
+
+func AppDataIds(writer http.ResponseWriter, request *http.Request) {
+	dataCount := Tables.AppData.Count()
+	ids := make([]uint32, 0)
+
+	for i := uint32(0); i < dataCount; i++ {
+		item, _ := Tables.AppData.GetAt(i)
+		ids = append(ids, item.Id)
+	}
+
+	fmt.Fprint(writer, fmt.Sprint(ids))
 }
 
 /* Root */
@@ -59,6 +75,7 @@ func main() {
 	http.HandleFunc("/api/data/add", AppDataAdd)
 	http.HandleFunc("/api/data/clear", AppDataClear)
 	http.HandleFunc("/api/data/get", AppDataGet)
+	http.HandleFunc("/api/data/ids", AppDataIds)
 
 	waitGroup.Add(1)
 	waitGroup.Add(1)

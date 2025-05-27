@@ -3,6 +3,7 @@ package DataBase
 import (
 	"Server/Helpers/File"
 	"encoding/json"
+	"errors"
 	"sync"
 )
 
@@ -12,17 +13,19 @@ type JsonTable[T Indexable] struct {
 	path      string
 	lastId    uint32
 	data      []T
+	def       T
 }
 
 /* public */
 
-func NewJsonTable[T Indexable](name string) *JsonTable[T] {
+func NewJsonTable[T Indexable](name string, d T) *JsonTable[T] {
 	result := &JsonTable[T]{}
 
 	result.directory = File.CurrentDirectory() + "/db"
 	result.path = result.directory + "/" + name + ".json"
 	result.lastId = 0
 	result.data = make([]T, 0)
+	result.def = d
 
 	if File.Exists(result.path) {
 		bytes := File.ReadBytes(result.path)
@@ -63,26 +66,32 @@ func (table *JsonTable[T]) AddOrSet(item T) {
 	table.save()
 }
 
-func (table *JsonTable[T]) Count() int {
-	return len(table.data)
+func (table *JsonTable[T]) Count() uint32 {
+	return uint32(len(table.data))
 }
 
-func (table *JsonTable[T]) Get(predicate func(T) bool) T {
+func (table *JsonTable[T]) Get(predicate func(T) bool) (T, error) {
+	table.mutex.Lock()
+	defer table.mutex.Unlock()
+
 	for _, item := range table.data {
 		if predicate(item) {
-			return item
+			return item, nil
 		}
 	}
 
-	return table.data[0]
+	return table.def, errors.New("Not found")
 }
 
-func (table *JsonTable[T]) GetAt(index uint32) T {
-	return table.data[index]
-}
+func (table *JsonTable[T]) GetAt(index uint32) (T, error) {
+	table.mutex.Lock()
+	defer table.mutex.Unlock()
 
-func (table *JsonTable[T]) GetAll() []T {
-	return table.data
+	if index >= table.Count() {
+		return table.def, errors.New("Not found")
+	}
+
+	return table.data[index], nil
 }
 
 func (table *JsonTable[T]) NextId(predicate func(T) bool) uint32 {
